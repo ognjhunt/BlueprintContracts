@@ -9,7 +9,8 @@ The format is intentionally simple:
 
 ## Unreleased
 
-- No unreleased changes yet.
+- Clarified in docs and maintenance guidance that `runtime_eligibility.readiness_state` is the required machine-readable launchability field.
+- Documented that consumer repos must not emit `runtime_eligibility.status` in place of `readiness_state`.
 
 ## 0.1.0 - 2026-03-13
 

@@ -66,3 +66,4 @@ Current workspace status at the time of this hardening pass:
 - Do not import banned heavy modules under `src/blueprint_contracts`
 - Keep threshold constants and policy builders covered by tests
 - Keep failure messages actionable because these contracts fail across repo boundaries
+- Keep `runtime_eligibility.readiness_state` stable across consumer repos; do not accept or emit `status` as the machine-readable launchability field

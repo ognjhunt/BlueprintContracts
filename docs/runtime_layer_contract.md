@@ -92,6 +92,8 @@ Consistency rules:
 - `launchable=false` without blockers requires `readiness_state=="incomplete"`
 - `grounding_status=="ungrounded"` requires `ungrounded_reason` and cannot be launchable
 
+`status` is not a substitute for `readiness_state`. Producers may keep informational status elsewhere, but `runtime_eligibility.readiness_state` is the required cross-repo contract field.
+
 ## Runtime-Layer Spec Validation
 
 `validate_runtime_layer_spec()` now validates both references and meaning:

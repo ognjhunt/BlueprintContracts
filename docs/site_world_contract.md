@@ -34,12 +34,14 @@ Presentation and demo artifacts may derive from the canonical package, but they 
 - canonical packages must declare `canonical_package_uri` and `canonical_package_version`
 - canonical packages must declare `qualification_state` and `downstream_evaluation_eligibility`
 - canonical packages must carry `runtime_layer_policy`, `runtime_eligibility`, `canonical_output`, `presentation_output`, and `provenance`
+- `runtime_eligibility.readiness_state` is required and authoritative for machine-readable launch gating
+- allowed `runtime_eligibility.readiness_state` values are `launchable`, `blocked`, and `incomplete`
 - `health.launchable` must exist and match `runtime_eligibility.launchable`
 - canonical package versions must agree across registration, health, and spec when present
 - canonical records must not be `presentation_only`
 - `grounding_status == "ungrounded"` requires `ungrounded_reason` and cannot be launchable
 
-`status` remains informational. Machine-readable launch gating is owned by `runtime_eligibility`.
+`status` remains informational. Machine-readable launch gating is owned by `runtime_eligibility`, and consumer repos must not emit `status` in place of `readiness_state`.
 
 ## Resolved Bundle Behavior
 
