@@ -1,4 +1,9 @@
-"""Runtime-layer grounding policy contract helpers."""
+"""Portable runtime-layer policy contracts shared across Blueprint repos.
+
+The constants in this module are shared policy, not local implementation detail.
+They define how Pipeline and Validation classify grounding confidence and how the
+runtime-layer handoff should be interpreted.
+"""
 
 from __future__ import annotations
 
@@ -7,12 +12,19 @@ from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 
+# Observed geometry above this confidence is treated as locked shared truth.
 PROTECTED_OBSERVED_THRESHOLD = 0.85
+# Reconstructed geometry above this confidence is treated as locked shared truth.
 PROTECTED_RECONSTRUCTED_THRESHOLD = 0.80
+# Below this confidence, regions are editable regardless of grounding level.
 EDITABLE_LOW_CONFIDENCE_THRESHOLD = 0.65
+# Task-critical objects become locked once they reach this confidence.
 TASK_CRITICAL_OVERRIDE_THRESHOLD = 0.70
+# Locked task-critical regions are dilated by this many pixels in render policy.
 TASK_CRITICAL_DILATION_PX = 3
+# Presentation quality is marked degraded above this editable ratio.
 DEGRADED_EDITABLE_RATIO_THRESHOLD = 0.40
+# Locked-region violation retry budget shared by both repos.
 LOCK_VIOLATION_RETRY_BUDGET = 1
 
 
@@ -30,6 +42,7 @@ def _read_json(path: Path) -> Dict[str, Any]:
 
 
 def grounding_fields_from_provenance(provenance: Mapping[str, Any] | None) -> Dict[str, Any]:
+    """Normalize provenance into the shared grounding fields expected by consumers."""
     provenance = dict(provenance or {})
     return {
         "grounding_level": str(provenance.get("grounding_level") or "").strip() or "generated",
@@ -57,6 +70,7 @@ def with_grounding_fields(
     provenance: Mapping[str, Any] | None = None,
     extra: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
+    """Return a copy of ``payload`` with normalized shared grounding fields applied."""
     result = dict(payload)
     if provenance is None and isinstance(result.get("provenance"), Mapping):
         provenance = dict(result.get("provenance") or {})
@@ -67,6 +81,7 @@ def with_grounding_fields(
 
 
 def task_critical_object_ids(task_entries: Sequence[Mapping[str, Any]]) -> set[str]:
+    """Collect the shared set of task-critical object ids from task-anchor entries."""
     critical: set[str] = set()
     for task in task_entries:
         if not isinstance(task, Mapping):
@@ -89,6 +104,7 @@ def classify_region(
     task_critical: bool = False,
     provenance_present: bool = True,
 ) -> str:
+    """Classify a region as ``locked``, ``uncertain``, or ``editable``."""
     if not provenance_present:
         return "editable"
 
@@ -120,6 +136,7 @@ def build_protected_regions_manifest(
     object_geometry_manifest: Mapping[str, Any],
     task_anchor_manifest: Mapping[str, Any],
 ) -> Dict[str, Any]:
+    """Build the shared protected-regions manifest consumed across repos."""
     tasks = (
         task_anchor_manifest.get("tasks")
         if isinstance(task_anchor_manifest.get("tasks"), list)
@@ -227,6 +244,7 @@ def build_protected_regions_manifest(
 
 
 def build_canonical_render_policy() -> Dict[str, Any]:
+    """Build the shared canonical render policy contract."""
     return {
         "schema_version": "v1",
         "compositing_mode": "runtime_layer_grounded",
@@ -252,6 +270,7 @@ def build_canonical_render_policy() -> Dict[str, Any]:
 
 
 def build_presentation_variance_policy() -> Dict[str, Any]:
+    """Build the shared presentation variance policy contract."""
     return {
         "schema_version": "v1",
         "allowed_variable_inputs": [
@@ -294,6 +313,7 @@ def _presentation_policy_paths(spec: Mapping[str, Any]) -> Dict[str, Path]:
 
 
 def validate_runtime_layer_spec(spec: Mapping[str, Any]) -> list[str]:
+    """Validate that a site-world spec references the required runtime-layer artifacts."""
     errors: list[str] = []
     if not str(spec.get("canonical_package_version") or "").strip():
         errors.append("missing_canonical_package_version")
@@ -315,6 +335,7 @@ def validate_runtime_layer_spec(spec: Mapping[str, Any]) -> list[str]:
 
 
 def load_runtime_layer_bundle(spec: Mapping[str, Any]) -> Dict[str, Any]:
+    """Load the local runtime-layer policy bundle referenced by a site-world spec."""
     paths = _presentation_policy_paths(spec)
     return {
         "protected_regions_manifest": _read_json(paths["protected_regions_manifest_path"]),
@@ -322,3 +343,23 @@ def load_runtime_layer_bundle(spec: Mapping[str, Any]) -> Dict[str, Any]:
         "presentation_variance_policy": _read_json(paths["presentation_variance_policy_path"]),
         "paths": {key: str(value) for key, value in paths.items()},
     }
+
+
+__all__ = [
+    "DEGRADED_EDITABLE_RATIO_THRESHOLD",
+    "EDITABLE_LOW_CONFIDENCE_THRESHOLD",
+    "LOCK_VIOLATION_RETRY_BUDGET",
+    "PROTECTED_OBSERVED_THRESHOLD",
+    "PROTECTED_RECONSTRUCTED_THRESHOLD",
+    "TASK_CRITICAL_DILATION_PX",
+    "TASK_CRITICAL_OVERRIDE_THRESHOLD",
+    "build_canonical_render_policy",
+    "build_presentation_variance_policy",
+    "build_protected_regions_manifest",
+    "classify_region",
+    "grounding_fields_from_provenance",
+    "load_runtime_layer_bundle",
+    "task_critical_object_ids",
+    "validate_runtime_layer_spec",
+    "with_grounding_fields",
+]

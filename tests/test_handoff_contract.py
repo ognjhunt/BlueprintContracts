@@ -5,6 +5,11 @@ import json
 import pytest
 
 from blueprint_contracts.handoff_contract import (
+    ALLOWED_QUALIFICATION_STATES,
+    LEGACY_THIN_COMPATIBILITY_MODE,
+    LEGACY_THIN_HANDOFF_MODE,
+    QUALIFIED_OPPORTUNITY_SCHEMA_VERSION,
+    RICH_HANDOFF_MODE,
     QualifiedOpportunityValidationError,
     load_and_validate_qualified_opportunity_handoff,
     validate_qualified_opportunity_handoff,
@@ -16,7 +21,7 @@ def _valid_handoff() -> dict:
         "schema_version": "v1",
         "site_submission_id": "site-sub-001",
         "opportunity_id": "opp-001",
-        "qualification_state": "ready",
+        "qualification_state": "READY",
         "downstream_evaluation_eligibility": True,
         "operator_approved_summary": "Qualified warehouse tote-pick lane",
         "scoped_task_definition": {
@@ -45,19 +50,58 @@ def _thin_handoff() -> dict:
 
 def test_validate_rich_handoff() -> None:
     payload = validate_qualified_opportunity_handoff(_valid_handoff())
-    assert payload["source_contract"] == "qualified_opportunity_v1"
+    assert payload["source_contract"] == RICH_HANDOFF_MODE
+    assert payload["qualification_state"] == "ready"
+    assert payload["requires_robot_team_for_execution"] is True
 
 
 def test_validate_thin_handoff() -> None:
     payload = validate_qualified_opportunity_handoff(_thin_handoff())
     assert payload["site_submission_id"] == "capture-demo-001"
     assert payload["operator_approved_summary"].startswith("BlueprintCapturePipeline handoff")
+    assert payload["source_contract"] == LEGACY_THIN_HANDOFF_MODE
+    assert payload["compatibility_mode"] == LEGACY_THIN_COMPATIBILITY_MODE
 
 
-def test_reject_missing_required_fields() -> None:
+def test_reject_missing_required_nested_field() -> None:
     payload = _valid_handoff()
     del payload["site_constraints"]["known_blockers"]
-    with pytest.raises(QualifiedOpportunityValidationError, match="known_blockers"):
+    with pytest.raises(
+        QualifiedOpportunityValidationError,
+        match=r"site_constraints\.known_blockers",
+    ):
+        validate_qualified_opportunity_handoff(payload)
+
+
+def test_reject_ambiguous_mixed_mode_payload() -> None:
+    payload = _thin_handoff()
+    payload["qualification_state"] = "ready"
+    payload["site_constraints"] = {
+        "operating_constraints": ["a"],
+        "privacy_security_constraints": ["b"],
+        "known_blockers": ["c"],
+    }
+    payload["scoped_task_definition"] = {
+        "task_id": "task-1",
+        "scoped_task_statement": "Do the thing",
+        "success_criteria": ["done"],
+        "in_scope_zone": "zone-a",
+    }
+    with pytest.raises(QualifiedOpportunityValidationError, match="mixes rich and legacy thin fields"):
+        validate_qualified_opportunity_handoff(payload)
+
+
+def test_reject_invalid_schema_version() -> None:
+    payload = _valid_handoff()
+    payload["schema_version"] = "v2"
+    with pytest.raises(QualifiedOpportunityValidationError, match="expected 'v1'"):
+        validate_qualified_opportunity_handoff(payload)
+
+
+def test_reject_invalid_qualification_state() -> None:
+    payload = _valid_handoff()
+    payload["qualification_state"] = "unknown"
+    with pytest.raises(QualifiedOpportunityValidationError, match="expected one of"):
         validate_qualified_opportunity_handoff(payload)
 
 
@@ -66,3 +110,8 @@ def test_load_and_validate_from_disk(tmp_path) -> None:
     path.write_text(json.dumps(_valid_handoff()), encoding="utf-8")
     payload = load_and_validate_qualified_opportunity_handoff(path)
     assert payload["opportunity_id"] == "opp-001"
+
+
+def test_public_constants_are_explicit() -> None:
+    assert QUALIFIED_OPPORTUNITY_SCHEMA_VERSION == "v1"
+    assert ALLOWED_QUALIFICATION_STATES == frozenset({"ready", "risky", "not_ready_yet"})

@@ -1,4 +1,9 @@
-"""Helpers for loading and validating site-world handoff artifacts."""
+"""Contract helpers for site-world handoff artifacts.
+
+Registration is the authoritative identity document. Health is optional. The
+adjacent spec is optional unless ``require_spec=True``. When present, health and
+spec must agree with the registration identity and schema version.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +12,22 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
+
+
+SITE_WORLD_SCHEMA_VERSION = "v1"
+DEFAULT_TRAJECTORY = "static"
+
+_GROUNDING_EMPTY_SUMMARY = {
+    "checks": {},
+    "missing_required": [],
+    "missing_optional": [],
+    "qualification_state": "",
+    "downstream_evaluation_eligibility": None,
+    "task_catalog_count": 0,
+    "scenario_catalog_count": 0,
+    "start_state_catalog_count": 0,
+    "robot_profile_count": 0,
+}
 
 
 class SiteWorldIntakeError(RuntimeError):
@@ -35,11 +56,12 @@ def _require_text(payload: Mapping[str, Any], key: str, *, label: str) -> str:
 def _validate_registration_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
     registration = dict(payload)
     schema_version = _require_text(registration, "schema_version", label="site_world_registration")
-    if schema_version != "v1":
+    if schema_version != SITE_WORLD_SCHEMA_VERSION:
         raise SiteWorldIntakeError(
             f"site_world_registration unsupported schema_version '{schema_version}'"
         )
-    _require_text(registration, "site_world_id", label="site_world_registration")
+    for key in ("site_world_id", "scene_id", "capture_id"):
+        _require_text(registration, key, label="site_world_registration")
     return registration
 
 
@@ -50,11 +72,11 @@ def _validate_health_payload(
 ) -> Dict[str, Any]:
     payload = dict(health)
     schema_version = _require_text(payload, "schema_version", label="site_world_health")
-    if schema_version != "v1":
+    if schema_version != SITE_WORLD_SCHEMA_VERSION:
         raise SiteWorldIntakeError(f"site_world_health unsupported schema_version '{schema_version}'")
     site_world_id = _require_text(payload, "site_world_id", label="site_world_health")
     registration_id = str(registration.get("site_world_id") or "").strip()
-    if registration_id and site_world_id != registration_id:
+    if site_world_id != registration_id:
         raise SiteWorldIntakeError("site_world_health site_world_id does not match registration")
     return payload
 
@@ -66,7 +88,7 @@ def _validate_spec_payload(
 ) -> Dict[str, Any]:
     payload = dict(spec)
     schema_version = _require_text(payload, "schema_version", label="site_world_spec")
-    if schema_version != "v1":
+    if schema_version != SITE_WORLD_SCHEMA_VERSION:
         raise SiteWorldIntakeError(f"site_world_spec unsupported schema_version '{schema_version}'")
     for key in ("scene_id", "capture_id", "canonical_package_version"):
         _require_text(payload, key, label="site_world_spec")
@@ -78,18 +100,20 @@ def _validate_spec_payload(
 
 
 def adjacent_site_world_paths(registration_path: Path) -> tuple[Path, Path]:
+    """Return the conventional adjacent health/spec paths for a registration file."""
     root = registration_path.parent
     return root / "site_world_health.json", root / "site_world_spec.json"
 
 
 def normalize_trajectory_payload(trajectory: Mapping[str, Any] | str | None) -> Dict[str, Any]:
+    """Normalize trajectory settings to a deterministic mapping payload."""
     if isinstance(trajectory, Mapping):
         payload = dict(trajectory)
         if "trajectory" not in payload:
-            payload["trajectory"] = "static"
+            payload["trajectory"] = DEFAULT_TRAJECTORY
         return payload
     token = str(trajectory or "").strip()
-    return {"trajectory": token or "static"}
+    return {"trajectory": token or DEFAULT_TRAJECTORY}
 
 
 def merge_site_world_definition(
@@ -97,6 +121,7 @@ def merge_site_world_definition(
     registration: Mapping[str, Any],
     spec: Mapping[str, Any],
 ) -> Dict[str, Any]:
+    """Merge spec-only fields onto the authoritative registration payload."""
     merged = copy.deepcopy(dict(registration))
     if not spec:
         return merged
@@ -123,6 +148,7 @@ def merge_site_world_definition(
 
 
 def grounding_summary(spec: Mapping[str, Any]) -> Dict[str, Any]:
+    """Summarize which local grounding artifacts are actually present on disk."""
     conditioning = (
         dict(spec.get("conditioning") or {})
         if isinstance(spec.get("conditioning"), Mapping)
@@ -196,6 +222,8 @@ def grounding_summary(spec: Mapping[str, Any]) -> Dict[str, Any]:
 
 @dataclass(frozen=True)
 class SiteWorldBundle:
+    """Resolved site-world bundle consisting of registration, health, and spec artifacts."""
+
     registration: Dict[str, Any]
     health: Dict[str, Any]
     spec: Dict[str, Any]
@@ -207,6 +235,7 @@ class SiteWorldBundle:
 
 
 def load_site_world_bundle(registration_path: Path, *, require_spec: bool = False) -> SiteWorldBundle:
+    """Load and validate a site-world registration and its adjacent artifacts."""
     registration_path = registration_path.resolve()
     if not registration_path.is_file():
         raise SiteWorldIntakeError(f"site-world registration not found: {registration_path}")
@@ -222,20 +251,21 @@ def load_site_world_bundle(registration_path: Path, *, require_spec: bool = Fals
         health=health,
         spec=spec,
         resolved=resolved,
-        grounding=grounding_summary(spec)
-        if spec
-        else {
-            "checks": {},
-            "missing_required": [],
-            "missing_optional": [],
-            "qualification_state": "",
-            "downstream_evaluation_eligibility": None,
-            "task_catalog_count": 0,
-            "scenario_catalog_count": 0,
-            "start_state_catalog_count": 0,
-            "robot_profile_count": 0,
-        },
+        grounding=grounding_summary(spec) if spec else dict(_GROUNDING_EMPTY_SUMMARY),
         registration_path=registration_path,
         health_path=health_path,
         spec_path=spec_path,
     )
+
+
+__all__ = [
+    "DEFAULT_TRAJECTORY",
+    "SITE_WORLD_SCHEMA_VERSION",
+    "SiteWorldBundle",
+    "SiteWorldIntakeError",
+    "adjacent_site_world_paths",
+    "grounding_summary",
+    "load_site_world_bundle",
+    "merge_site_world_definition",
+    "normalize_trajectory_payload",
+]
