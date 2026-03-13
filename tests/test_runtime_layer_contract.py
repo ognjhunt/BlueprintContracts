@@ -4,6 +4,9 @@ import json
 from pathlib import Path
 
 from blueprint_contracts.runtime_layer_contract import (
+    ALLOWED_GROUNDING_LEVELS,
+    ALLOWED_GROUNDING_STATUSES,
+    ALLOWED_RUNTIME_READINESS_STATES,
     DEGRADED_EDITABLE_RATIO_THRESHOLD,
     EDITABLE_LOW_CONFIDENCE_THRESHOLD,
     LOCK_VIOLATION_RETRY_BUDGET,
@@ -16,6 +19,9 @@ from blueprint_contracts.runtime_layer_contract import (
     build_protected_regions_manifest,
     classify_region,
     load_runtime_layer_bundle,
+    validate_grounding_provenance,
+    validate_output_linkage,
+    validate_runtime_eligibility,
     validate_runtime_layer_spec,
 )
 
@@ -106,11 +112,38 @@ def test_validate_and_load_runtime_layer_bundle(tmp_path: Path) -> None:
     protected_path = root / "protected.json"
     render_path = root / "render.json"
     variance_path = root / "variance.json"
-    _write_json(protected_path, {"schema_version": "v1", "regions": []})
+    _write_json(protected_path, {"schema_version": "v1", "grounding_status": "grounded", "region_count": 0, "regions": []})
     _write_json(render_path, build_canonical_render_policy())
     _write_json(variance_path, build_presentation_variance_policy())
     spec = {
         "canonical_package_version": "pkg-v1",
+        "grounding_status": "grounded",
+        "runtime_eligibility": {
+            "launchable": True,
+            "readiness_state": "launchable",
+            "blockers": [],
+            "warnings": [],
+            "grounding_status": "grounded",
+        },
+        "canonical_output": {
+            "canonical_artifact_uri": "gs://bucket/spec.json",
+            "presentation_artifact_uri": "gs://bucket/presentation_world_manifest.json",
+            "derivation_mode": "grounding_first",
+            "authoritative_record": True,
+        },
+        "presentation_output": {
+            "canonical_artifact_uri": "gs://bucket/spec.json",
+            "presentation_artifact_uri": "gs://bucket/runtime_demo_manifest.json",
+            "derivation_mode": "limited",
+            "authoritative_record": False,
+        },
+        "provenance": {
+            "grounding_level": "observed",
+            "confidence": 0.95,
+            "evidence_sources": ["gs://bucket/scene_memory_manifest.json"],
+            "canonical_truth": True,
+            "presentation_only": False,
+        },
         "runtime_layer_policy": {
             "protected_regions_manifest_uri": "gs://bucket/protected.json",
             "canonical_render_policy_uri": "gs://bucket/render.json",
@@ -118,6 +151,7 @@ def test_validate_and_load_runtime_layer_bundle(tmp_path: Path) -> None:
             "protected_regions_manifest_path": str(protected_path),
             "canonical_render_policy_path": str(render_path),
             "presentation_variance_policy_path": str(variance_path),
+            "grounding_status": "grounded",
         },
     }
     assert validate_runtime_layer_spec(spec) == []
@@ -133,3 +167,112 @@ def test_shared_threshold_constants_are_locked() -> None:
     assert TASK_CRITICAL_DILATION_PX == 3
     assert DEGRADED_EDITABLE_RATIO_THRESHOLD == 0.40
     assert LOCK_VIOLATION_RETRY_BUDGET == 1
+
+
+def test_validate_grounding_provenance_rejects_canonical_truth_without_evidence() -> None:
+    errors = validate_grounding_provenance(
+        {
+            "grounding_level": "observed",
+            "confidence": 0.9,
+            "evidence_sources": [],
+            "canonical_truth": True,
+            "presentation_only": False,
+        }
+    )
+    assert "provenance:canonical_truth_requires_evidence_sources" in errors
+
+
+def test_validate_output_linkage_rejects_authoritative_presentation_output() -> None:
+    errors = validate_output_linkage(
+        {
+            "canonical_artifact_uri": "gs://bucket/spec.json",
+            "presentation_artifact_uri": "gs://bucket/demo.json",
+            "derivation_mode": "limited",
+            "authoritative_record": True,
+        },
+        context="presentation_output",
+        expected_authoritative=False,
+    )
+    assert "presentation_output:authoritative_record_expected_false" in errors
+
+
+def test_validate_runtime_eligibility_enforces_state_and_blocker_consistency() -> None:
+    errors = validate_runtime_eligibility(
+        {
+            "launchable": False,
+            "readiness_state": "launchable",
+            "blockers": ["missing_task_anchor_manifest"],
+            "warnings": [],
+            "grounding_status": "grounded",
+        }
+    )
+    assert "runtime_eligibility:blocked_runtime_requires_blocked_state" in errors
+
+
+def test_validate_runtime_layer_spec_rejects_ungrounded_launchable_spec(tmp_path: Path) -> None:
+    root = tmp_path / "runtime"
+    protected_path = root / "protected.json"
+    render_path = root / "render.json"
+    variance_path = root / "variance.json"
+    _write_json(
+        protected_path,
+        {
+            "schema_version": "v1",
+            "grounding_status": "ungrounded",
+            "ungrounded_reason": "missing_object_index",
+            "region_count": 0,
+            "regions": [],
+        },
+    )
+    _write_json(render_path, build_canonical_render_policy())
+    _write_json(variance_path, build_presentation_variance_policy())
+    spec = {
+        "canonical_package_version": "pkg-v1",
+        "grounding_status": "ungrounded",
+        "ungrounded_reason": "missing_object_index",
+        "runtime_eligibility": {
+            "launchable": True,
+            "readiness_state": "launchable",
+            "blockers": [],
+            "warnings": [],
+            "grounding_status": "ungrounded",
+            "ungrounded_reason": "missing_object_index",
+        },
+        "canonical_output": {
+            "canonical_artifact_uri": "gs://bucket/spec.json",
+            "presentation_artifact_uri": "gs://bucket/presentation_world_manifest.json",
+            "derivation_mode": "grounding_first",
+            "authoritative_record": True,
+        },
+        "presentation_output": {
+            "canonical_artifact_uri": "gs://bucket/spec.json",
+            "presentation_artifact_uri": "gs://bucket/runtime_demo_manifest.json",
+            "derivation_mode": "limited",
+            "authoritative_record": False,
+        },
+        "provenance": {
+            "grounding_level": "observed",
+            "confidence": 0.95,
+            "evidence_sources": ["gs://bucket/scene_memory_manifest.json"],
+            "canonical_truth": True,
+            "presentation_only": False,
+        },
+        "runtime_layer_policy": {
+            "protected_regions_manifest_uri": "gs://bucket/protected.json",
+            "canonical_render_policy_uri": "gs://bucket/render.json",
+            "presentation_variance_policy_uri": "gs://bucket/variance.json",
+            "protected_regions_manifest_path": str(protected_path),
+            "canonical_render_policy_path": str(render_path),
+            "presentation_variance_policy_path": str(variance_path),
+            "grounding_status": "ungrounded",
+            "ungrounded_reason": "missing_object_index",
+        },
+    }
+    errors = validate_runtime_layer_spec(spec)
+    assert "runtime_eligibility:ungrounded_cannot_be_launchable" in errors
+
+
+def test_allowed_contract_state_sets_are_explicit() -> None:
+    assert ALLOWED_GROUNDING_LEVELS == frozenset({"observed", "reconstructed", "inferred", "generated"})
+    assert ALLOWED_GROUNDING_STATUSES == frozenset({"grounded", "ungrounded"})
+    assert ALLOWED_RUNTIME_READINESS_STATES == frozenset({"launchable", "blocked", "incomplete"})

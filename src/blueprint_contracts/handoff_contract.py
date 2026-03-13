@@ -3,6 +3,12 @@
 This module owns the portable validation boundary between BlueprintCapturePipeline
 and BlueprintValidation for qualified opportunity handoffs.
 
+Qualified opportunity handoffs are qualification inputs only. They can influence
+canonical launch gating through ``qualification_state`` and
+``downstream_evaluation_eligibility``, but they are never authoritative
+site-world packages and they do not imply runtime readiness, canonical truth, or
+canonical package verification.
+
 Accepted contract modes:
 
 - ``RICH_HANDOFF_MODE``: the explicit downstream handoff with scoped task and site

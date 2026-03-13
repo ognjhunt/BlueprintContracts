@@ -22,6 +22,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
+from .runtime_layer_contract import validate_grounding_provenance, validate_output_linkage
+
 
 CANONICAL_PACKAGE_HASH_INPUTS = (
     "scene_memory_manifest",
@@ -95,9 +97,35 @@ def verify_canonical_package_version(
     presentation_variance_policy: Mapping[str, Any],
 ) -> Optional[str]:
     """Verify a spec's canonical package version against local referenced inputs."""
+    details = verify_canonical_package_version_details(
+        spec=spec,
+        protected_regions_manifest=protected_regions_manifest,
+        canonical_render_policy=canonical_render_policy,
+        presentation_variance_policy=presentation_variance_policy,
+    )
+    status = str(details.get("status") or "")
+    if status in {"verified", "expected_version_missing"}:
+        return None
+    if status == "inputs_missing":
+        return "canonical_package_verification_inputs_missing"
+    if status == "mismatch":
+        observed = str(details.get("observed_version") or "").strip()
+        return f"canonical_package_version_mismatch:{observed}" if observed else "canonical_package_version_mismatch"
+    return str(details.get("error") or "canonical_package_verification_failed")
+
+
+def verify_canonical_package_version_details(
+    *,
+    spec: Mapping[str, Any],
+    protected_regions_manifest: Mapping[str, Any],
+    canonical_render_policy: Mapping[str, Any],
+    presentation_variance_policy: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Return machine-readable canonical package verification details."""
     conditioning = dict(spec.get("conditioning") or {}) if isinstance(spec.get("conditioning"), Mapping) else {}
     geometry = dict(spec.get("geometry") or {}) if isinstance(spec.get("geometry"), Mapping) else {}
     local_paths = dict(conditioning.get("local_paths") or {}) if isinstance(conditioning.get("local_paths"), Mapping) else {}
+    expected = str(spec.get("canonical_package_version") or "").strip()
 
     scene_memory_manifest_path = _optional_path(
         conditioning.get("scene_memory_manifest_path"),
@@ -118,7 +146,12 @@ def verify_canonical_package_version(
             task_anchor_manifest_path,
         )
     ):
-        return "canonical_package_verification_inputs_missing"
+        return {
+            "status": "expected_version_missing" if not expected else "inputs_missing",
+            "expected_version": expected or None,
+            "observed_version": None,
+            "error": None if not expected else "canonical_package_verification_inputs_missing",
+        }
     observed = compute_canonical_package_version(
         scene_memory_manifest=_read_json(scene_memory_manifest_path),
         conditioning_bundle=_read_json(conditioning_bundle_path),
@@ -129,15 +162,85 @@ def verify_canonical_package_version(
         canonical_render_policy=canonical_render_policy,
         presentation_variance_policy=presentation_variance_policy,
     )
-    expected = str(spec.get("canonical_package_version") or "").strip()
-    if expected and observed != expected:
-        return f"canonical_package_version_mismatch:{observed}"
-    return None
+    if not expected:
+        return {
+            "status": "expected_version_missing",
+            "expected_version": None,
+            "observed_version": observed,
+            "error": None,
+        }
+    if observed != expected:
+        return {
+            "status": "mismatch",
+            "expected_version": expected,
+            "observed_version": observed,
+            "error": f"canonical_package_version_mismatch:{observed}",
+        }
+    return {
+        "status": "verified",
+        "expected_version": expected,
+        "observed_version": observed,
+        "error": None,
+    }
+
+
+def validate_canonical_package_contract(
+    spec: Mapping[str, Any],
+    *,
+    verification: Mapping[str, Any] | None = None,
+) -> list[str]:
+    """Validate the shared canonical package contract carried by a site-world spec."""
+    if not isinstance(spec, Mapping):
+        return ["canonical_package_spec:missing_mapping"]
+
+    errors: list[str] = []
+    if not str(spec.get("canonical_package_version") or "").strip():
+        errors.append("missing_canonical_package_version")
+
+    canonical_output = spec.get("canonical_output")
+    if canonical_output is None:
+        errors.append("missing_canonical_output")
+    else:
+        errors.extend(
+            validate_output_linkage(
+                canonical_output,
+                context="canonical_output",
+                expected_authoritative=True,
+            )
+        )
+
+    presentation_output = spec.get("presentation_output")
+    if presentation_output is None:
+        errors.append("missing_presentation_output")
+    else:
+        errors.extend(
+            validate_output_linkage(
+                presentation_output,
+                context="presentation_output",
+                expected_authoritative=False,
+            )
+        )
+
+    provenance = spec.get("provenance")
+    if provenance is None:
+        errors.append("missing_provenance")
+    else:
+        errors.extend(validate_grounding_provenance(provenance))
+        if bool(dict(provenance).get("presentation_only")):
+            errors.append("provenance:presentation_only_conflicts_with_canonical_package")
+
+    if isinstance(verification, Mapping):
+        status = str(verification.get("status") or "").strip()
+        if status and status != "verified":
+            errors.append(f"canonical_package_verification:{status}")
+    return errors
 
 
 __all__ = [
     "CANONICAL_PACKAGE_HASH_INPUTS",
     "compute_canonical_package_version",
     "normalized_json_bytes",
+    "validate_canonical_package_contract",
     "verify_canonical_package_version",
+    "verify_canonical_package_version_details",
 ]

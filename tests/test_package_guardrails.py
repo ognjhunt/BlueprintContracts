@@ -51,8 +51,12 @@ def test_module_public_apis_are_explicit() -> None:
         "load_site_world_bundle",
         "merge_site_world_definition",
         "normalize_trajectory_payload",
+        "validate_site_world_bundle",
     ]
     assert runtime_layer_contract.__all__ == [
+        "ALLOWED_GROUNDING_LEVELS",
+        "ALLOWED_GROUNDING_STATUSES",
+        "ALLOWED_RUNTIME_READINESS_STATES",
         "DEGRADED_EDITABLE_RATIO_THRESHOLD",
         "EDITABLE_LOW_CONFIDENCE_THRESHOLD",
         "LOCK_VIOLATION_RETRY_BUDGET",
@@ -67,6 +71,9 @@ def test_module_public_apis_are_explicit() -> None:
         "grounding_fields_from_provenance",
         "load_runtime_layer_bundle",
         "task_critical_object_ids",
+        "validate_grounding_provenance",
+        "validate_output_linkage",
+        "validate_runtime_eligibility",
         "validate_runtime_layer_spec",
         "with_grounding_fields",
     ]
@@ -74,7 +81,9 @@ def test_module_public_apis_are_explicit() -> None:
         "CANONICAL_PACKAGE_HASH_INPUTS",
         "compute_canonical_package_version",
         "normalized_json_bytes",
+        "validate_canonical_package_contract",
         "verify_canonical_package_version",
+        "verify_canonical_package_version_details",
     ]
 
 

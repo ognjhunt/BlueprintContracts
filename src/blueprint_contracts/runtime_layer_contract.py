@@ -27,6 +27,10 @@ DEGRADED_EDITABLE_RATIO_THRESHOLD = 0.40
 # Locked-region violation retry budget shared by both repos.
 LOCK_VIOLATION_RETRY_BUDGET = 1
 
+ALLOWED_GROUNDING_LEVELS = frozenset({"observed", "reconstructed", "inferred", "generated"})
+ALLOWED_GROUNDING_STATUSES = frozenset({"grounded", "ungrounded"})
+ALLOWED_RUNTIME_READINESS_STATES = frozenset({"launchable", "blocked", "incomplete"})
+
 
 def _safe_float(value: Any) -> Optional[float]:
     try:
@@ -39,6 +43,16 @@ def _safe_float(value: Any) -> Optional[float]:
 def _read_json(path: Path) -> Dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     return dict(payload) if isinstance(payload, Mapping) else {}
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _prefix_errors(prefix: str, errors: Sequence[str]) -> list[str]:
+    return [f"{prefix}:{error}" for error in errors]
 
 
 def grounding_fields_from_provenance(provenance: Mapping[str, Any] | None) -> Dict[str, Any]:
@@ -62,6 +76,129 @@ def grounding_fields_from_provenance(provenance: Mapping[str, Any] | None) -> Di
         "canonical_truth": bool(provenance.get("canonical_truth")),
         "presentation_only": bool(provenance.get("presentation_only")),
     }
+
+
+def validate_grounding_provenance(
+    provenance: Mapping[str, Any] | None,
+    *,
+    context: str = "provenance",
+) -> list[str]:
+    """Validate shared provenance semantics used by canonical and presentation artifacts."""
+    if not isinstance(provenance, Mapping):
+        return [f"{context}:missing_mapping"]
+
+    fields = grounding_fields_from_provenance(provenance)
+    errors: list[str] = []
+    grounding_level = str(fields.get("grounding_level") or "").strip().lower()
+    evidence_sources = _string_list(fields.get("evidence_sources"))
+    canonical_truth = bool(fields.get("canonical_truth"))
+    presentation_only = bool(fields.get("presentation_only"))
+
+    if grounding_level not in ALLOWED_GROUNDING_LEVELS:
+        allowed = ",".join(sorted(ALLOWED_GROUNDING_LEVELS))
+        errors.append(f"{context}:invalid_grounding_level:{grounding_level or 'missing'}:{allowed}")
+    if canonical_truth and not grounding_level:
+        errors.append(f"{context}:canonical_truth_requires_grounding_level")
+    if canonical_truth and not evidence_sources:
+        errors.append(f"{context}:canonical_truth_requires_evidence_sources")
+    if presentation_only and canonical_truth:
+        errors.append(f"{context}:presentation_only_conflicts_with_canonical_truth")
+    if grounding_level in {"observed", "reconstructed"} and not evidence_sources:
+        errors.append(f"{context}:evidence_sources_required_for_{grounding_level}")
+    return errors
+
+
+def validate_output_linkage(
+    payload: Mapping[str, Any] | None,
+    *,
+    context: str = "output",
+    expected_authoritative: Optional[bool] = None,
+) -> list[str]:
+    """Validate canonical/presentation linkage fields shared across artifacts."""
+    if not isinstance(payload, Mapping):
+        return [f"{context}:missing_mapping"]
+
+    errors: list[str] = []
+    canonical_artifact_uri = str(payload.get("canonical_artifact_uri") or "").strip()
+    if not canonical_artifact_uri:
+        errors.append(f"{context}:missing_canonical_artifact_uri")
+    if "authoritative_record" not in payload or not isinstance(payload.get("authoritative_record"), bool):
+        errors.append(f"{context}:missing_authoritative_record")
+    else:
+        authoritative_record = bool(payload.get("authoritative_record"))
+        if expected_authoritative is True and not authoritative_record:
+            errors.append(f"{context}:authoritative_record_expected_true")
+        if expected_authoritative is False and authoritative_record:
+            errors.append(f"{context}:authoritative_record_expected_false")
+    derivation_mode = str(payload.get("derivation_mode") or "").strip()
+    if not derivation_mode:
+        errors.append(f"{context}:missing_derivation_mode")
+    if "output_policy" in payload and payload.get("output_policy") is not None and not isinstance(
+        payload.get("output_policy"), Mapping
+    ):
+        errors.append(f"{context}:invalid_output_policy")
+    return errors
+
+
+def validate_runtime_eligibility(
+    payload: Mapping[str, Any] | None,
+    *,
+    context: str = "runtime_eligibility",
+) -> list[str]:
+    """Validate the machine-readable launchability contract."""
+    if not isinstance(payload, Mapping):
+        return [f"{context}:missing_mapping"]
+
+    errors: list[str] = []
+    launchable = payload.get("launchable")
+    readiness_state = str(payload.get("readiness_state") or "").strip().lower()
+    blockers = payload.get("blockers")
+    warnings = payload.get("warnings")
+    grounding_status = str(payload.get("grounding_status") or "").strip().lower()
+
+    if not isinstance(launchable, bool):
+        errors.append(f"{context}:missing_launchable")
+    if readiness_state not in ALLOWED_RUNTIME_READINESS_STATES:
+        allowed = ",".join(sorted(ALLOWED_RUNTIME_READINESS_STATES))
+        errors.append(f"{context}:invalid_readiness_state:{readiness_state or 'missing'}:{allowed}")
+    if not isinstance(blockers, list):
+        errors.append(f"{context}:missing_blockers")
+        blockers_list: list[str] = []
+    else:
+        blockers_list = _string_list(blockers)
+    if not isinstance(warnings, list):
+        errors.append(f"{context}:missing_warnings")
+    if grounding_status not in ALLOWED_GROUNDING_STATUSES:
+        allowed = ",".join(sorted(ALLOWED_GROUNDING_STATUSES))
+        errors.append(f"{context}:invalid_grounding_status:{grounding_status or 'missing'}:{allowed}")
+
+    if isinstance(launchable, bool):
+        if launchable:
+            if readiness_state != "launchable":
+                errors.append(f"{context}:launchable_requires_launchable_state")
+            if blockers_list:
+                errors.append(f"{context}:launchable_requires_no_blockers")
+        elif blockers_list:
+            if readiness_state != "blocked":
+                errors.append(f"{context}:blocked_runtime_requires_blocked_state")
+        elif readiness_state != "incomplete":
+            errors.append(f"{context}:incomplete_runtime_requires_incomplete_state")
+
+    if grounding_status == "ungrounded":
+        if not str(payload.get("ungrounded_reason") or "").strip():
+            errors.append(f"{context}:ungrounded_requires_reason")
+        if payload.get("launchable") is True:
+            errors.append(f"{context}:ungrounded_cannot_be_launchable")
+
+    launchable_backends = payload.get("launchable_backends")
+    if launchable_backends is not None and not isinstance(launchable_backends, list):
+        errors.append(f"{context}:invalid_launchable_backends")
+    default_backend = str(payload.get("default_backend") or "").strip()
+    if default_backend and isinstance(launchable_backends, list):
+        available_backends = _string_list(launchable_backends)
+        if available_backends and default_backend not in available_backends:
+            errors.append(f"{context}:default_backend_not_launchable:{default_backend}")
+    return errors
 
 
 def with_grounding_fields(
@@ -317,6 +454,34 @@ def validate_runtime_layer_spec(spec: Mapping[str, Any]) -> list[str]:
     errors: list[str] = []
     if not str(spec.get("canonical_package_version") or "").strip():
         errors.append("missing_canonical_package_version")
+    runtime_eligibility = spec.get("runtime_eligibility")
+    if runtime_eligibility is None:
+        errors.append("missing_runtime_contract_field:runtime_eligibility")
+    else:
+        errors.extend(validate_runtime_eligibility(runtime_eligibility))
+    canonical_output = spec.get("canonical_output")
+    if canonical_output is None:
+        errors.append("missing_runtime_contract_field:canonical_output")
+    else:
+        errors.extend(validate_output_linkage(canonical_output, context="canonical_output", expected_authoritative=True))
+    presentation_output = spec.get("presentation_output")
+    if presentation_output is None:
+        errors.append("missing_runtime_contract_field:presentation_output")
+    else:
+        errors.extend(
+            validate_output_linkage(
+                presentation_output,
+                context="presentation_output",
+                expected_authoritative=False,
+            )
+        )
+    provenance = spec.get("provenance")
+    if provenance is None:
+        errors.append("missing_runtime_contract_field:provenance")
+    else:
+        errors.extend(validate_grounding_provenance(provenance))
+        if bool(grounding_fields_from_provenance(provenance).get("presentation_only")):
+            errors.append("provenance:presentation_only_conflicts_with_canonical_spec")
     policy = dict(spec.get("runtime_layer_policy") or {}) if isinstance(spec.get("runtime_layer_policy"), Mapping) else {}
     for key in (
         "protected_regions_manifest_uri",
@@ -328,9 +493,60 @@ def validate_runtime_layer_spec(spec: Mapping[str, Any]) -> list[str]:
     ):
         if not str(policy.get(key) or "").strip():
             errors.append(f"missing_runtime_layer_policy:{key}")
-    for path in _presentation_policy_paths(spec).values():
+    for name, path in _presentation_policy_paths(spec).items():
         if not path.is_file():
             errors.append(f"missing_runtime_layer_policy_file:{path.name}")
+            continue
+        payload = _read_json(path)
+        if str(payload.get("schema_version") or "").strip() != "v1":
+            errors.append(f"invalid_runtime_layer_policy_schema:{name}")
+        if name == "protected_regions_manifest_path":
+            protected_grounding_status = str(payload.get("grounding_status") or "").strip().lower()
+            if protected_grounding_status not in ALLOWED_GROUNDING_STATUSES:
+                errors.append(
+                    f"protected_regions_manifest:invalid_grounding_status:{protected_grounding_status or 'missing'}"
+                )
+            if "region_count" in payload and int(payload.get("region_count") or 0) != len(
+                [item for item in payload.get("regions", []) if isinstance(item, Mapping)]
+            ):
+                errors.append("protected_regions_manifest:region_count_mismatch")
+
+    spec_grounding_status = str(spec.get("grounding_status") or "").strip().lower()
+    runtime_grounding_status = (
+        str(runtime_eligibility.get("grounding_status") or "").strip().lower()
+        if isinstance(runtime_eligibility, Mapping)
+        else ""
+    )
+    policy_grounding_status = str(policy.get("grounding_status") or "").strip().lower()
+    for label, value in (
+        ("spec", spec_grounding_status),
+        ("runtime_layer_policy", policy_grounding_status),
+        ("runtime_eligibility", runtime_grounding_status),
+    ):
+        if value and value not in ALLOWED_GROUNDING_STATUSES:
+            errors.append(f"{label}:invalid_grounding_status:{value}")
+
+    present_grounding_statuses = {
+        value for value in (spec_grounding_status, runtime_grounding_status, policy_grounding_status) if value
+    }
+    if len(present_grounding_statuses) > 1:
+        errors.append("grounding_status_mismatch")
+
+    if isinstance(runtime_eligibility, Mapping) and runtime_grounding_status == "ungrounded":
+        for candidate in (
+            str(runtime_eligibility.get("ungrounded_reason") or "").strip(),
+            str(policy.get("ungrounded_reason") or "").strip(),
+            str(spec.get("ungrounded_reason") or "").strip(),
+        ):
+            if candidate:
+                break
+        else:
+            errors.append("ungrounded_reason_missing")
+
+    if isinstance(runtime_eligibility, Mapping):
+        launchable = runtime_eligibility.get("launchable")
+        if launchable is True and runtime_grounding_status == "ungrounded":
+            errors.append("runtime_eligibility:ungrounded_cannot_be_launchable")
     return errors
 
 
@@ -346,6 +562,9 @@ def load_runtime_layer_bundle(spec: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 __all__ = [
+    "ALLOWED_GROUNDING_LEVELS",
+    "ALLOWED_GROUNDING_STATUSES",
+    "ALLOWED_RUNTIME_READINESS_STATES",
     "DEGRADED_EDITABLE_RATIO_THRESHOLD",
     "EDITABLE_LOW_CONFIDENCE_THRESHOLD",
     "LOCK_VIOLATION_RETRY_BUDGET",
@@ -360,6 +579,9 @@ __all__ = [
     "grounding_fields_from_provenance",
     "load_runtime_layer_bundle",
     "task_critical_object_ids",
+    "validate_grounding_provenance",
+    "validate_output_linkage",
+    "validate_runtime_eligibility",
     "validate_runtime_layer_spec",
     "with_grounding_fields",
 ]

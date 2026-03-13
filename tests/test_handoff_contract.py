@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from blueprint_contracts.canonical_package import validate_canonical_package_contract
 from blueprint_contracts.handoff_contract import (
     ALLOWED_QUALIFICATION_STATES,
     LEGACY_THIN_COMPATIBILITY_MODE,
@@ -112,3 +113,10 @@ def test_load_and_validate_from_disk(tmp_path) -> None:
 def test_public_constants_are_explicit() -> None:
     assert QUALIFIED_OPPORTUNITY_SCHEMA_VERSION == "v1"
     assert ALLOWED_QUALIFICATION_STATES == frozenset({"ready", "risky", "not_ready_yet"})
+
+
+def test_handoff_normalization_remains_qualification_only() -> None:
+    payload = validate_qualified_opportunity_handoff(_valid_handoff())
+    errors = validate_canonical_package_contract(payload)
+    assert "missing_canonical_package_version" in errors
+    assert "missing_canonical_output" in errors

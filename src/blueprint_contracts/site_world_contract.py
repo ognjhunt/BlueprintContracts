@@ -13,6 +13,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
+from .canonical_package import validate_canonical_package_contract
+from .runtime_layer_contract import (
+    ALLOWED_GROUNDING_STATUSES,
+    validate_grounding_provenance,
+    validate_output_linkage,
+    validate_runtime_eligibility,
+)
+
 
 SITE_WORLD_SCHEMA_VERSION = "v1"
 DEFAULT_TRAJECTORY = "static"
@@ -140,7 +148,15 @@ def merge_site_world_definition(
         "conditioning",
         "geometry",
         "runtime_layer_policy",
+        "runtime_eligibility",
         "task_anchor_manifest_path",
+        "qualification_references",
+        "canonical_output",
+        "presentation_output",
+        "world_model_policy",
+        "provenance",
+        "generated_at",
+        "empty_index_cause",
     ):
         if key in spec:
             merged[key] = copy.deepcopy(spec[key])
@@ -234,6 +250,129 @@ class SiteWorldBundle:
     spec_path: Path
 
 
+def _has_non_empty_field(payload: Mapping[str, Any], key: str) -> bool:
+    if key not in payload:
+        return False
+    value = payload.get(key)
+    if isinstance(value, str):
+        return bool(value.strip())
+    return value is not None
+
+
+def validate_site_world_bundle(bundle: SiteWorldBundle, *, production_mode: bool = False) -> list[str]:
+    """Validate a loaded site-world bundle against shared cross-repo requirements."""
+    errors: list[str] = []
+    registration = bundle.registration
+    health = bundle.health
+    spec = bundle.spec
+
+    if not spec:
+        return ["missing_site_world_spec"] if production_mode else errors
+
+    if production_mode:
+        required_spec_fields = (
+            "canonical_package_uri",
+            "canonical_package_version",
+            "qualification_state",
+            "downstream_evaluation_eligibility",
+            "grounding_status",
+            "runtime_layer_policy",
+            "runtime_eligibility",
+            "canonical_output",
+            "presentation_output",
+            "provenance",
+        )
+        for key in required_spec_fields:
+            if not _has_non_empty_field(spec, key):
+                errors.append(f"missing_spec_field:{key}")
+
+    errors.extend(validate_canonical_package_contract(spec))
+
+    runtime_eligibility = spec.get("runtime_eligibility")
+    if isinstance(runtime_eligibility, Mapping):
+        errors.extend(validate_runtime_eligibility(runtime_eligibility))
+    elif production_mode:
+        errors.append("missing_spec_field:runtime_eligibility")
+
+    provenance = spec.get("provenance")
+    if isinstance(provenance, Mapping):
+        errors.extend(validate_grounding_provenance(provenance))
+        if bool(provenance.get("presentation_only")):
+            errors.append("provenance:presentation_only_conflicts_with_canonical_bundle")
+    elif production_mode:
+        errors.append("missing_spec_field:provenance")
+
+    for field, expected_authoritative in (("canonical_output", True), ("presentation_output", False)):
+        payload = spec.get(field)
+        if isinstance(payload, Mapping):
+            errors.extend(
+                validate_output_linkage(
+                    payload,
+                    context=field,
+                    expected_authoritative=expected_authoritative,
+                )
+            )
+        elif production_mode:
+            errors.append(f"missing_spec_field:{field}")
+
+    if production_mode and not isinstance(health, Mapping):
+        errors.append("missing_site_world_health")
+    if production_mode and "launchable" not in health:
+        errors.append("missing_health_field:launchable")
+
+    shared_grounding_statuses = {
+        str(spec.get("grounding_status") or "").strip().lower(),
+        str(health.get("grounding_status") or "").strip().lower(),
+        str(registration.get("grounding_status") or "").strip().lower(),
+        str((runtime_eligibility or {}).get("grounding_status") or "").strip().lower()
+        if isinstance(runtime_eligibility, Mapping)
+        else "",
+    }
+    shared_grounding_statuses.discard("")
+    if any(value not in ALLOWED_GROUNDING_STATUSES for value in shared_grounding_statuses):
+        errors.append("invalid_grounding_status")
+    if len(shared_grounding_statuses) > 1:
+        errors.append("grounding_status_mismatch")
+
+    versions = {
+        str(payload.get("canonical_package_version") or "").strip()
+        for payload in (registration, health, spec)
+        if isinstance(payload, Mapping) and str(payload.get("canonical_package_version") or "").strip()
+    }
+    if len(versions) > 1:
+        errors.append("canonical_package_version_mismatch")
+
+    if production_mode and isinstance(runtime_eligibility, Mapping):
+        health_launchable = health.get("launchable")
+        if not isinstance(health_launchable, bool):
+            errors.append("invalid_health_field:launchable")
+        elif health_launchable != bool(runtime_eligibility.get("launchable")):
+            errors.append("health_launchable_mismatch")
+
+    effective_grounding_status = str(spec.get("grounding_status") or "").strip().lower()
+    if effective_grounding_status == "ungrounded":
+        reason = (
+            str(spec.get("ungrounded_reason") or "").strip()
+            or str(health.get("ungrounded_reason") or "").strip()
+            or str(registration.get("ungrounded_reason") or "").strip()
+            or str((runtime_eligibility or {}).get("ungrounded_reason") or "").strip()
+            if isinstance(runtime_eligibility, Mapping)
+            else ""
+        )
+        if not reason:
+            errors.append("ungrounded_reason_missing")
+        if isinstance(runtime_eligibility, Mapping) and runtime_eligibility.get("launchable") is True:
+            errors.append("ungrounded_canonical_bundle_cannot_be_launchable")
+
+    for label, payload in (("registration", registration), ("health", health)):
+        if isinstance(payload, Mapping) and payload.get("presentation_only") is True:
+            errors.append(f"{label}:presentation_only_conflicts_with_canonical_bundle")
+        if isinstance(payload, Mapping) and "authoritative_record" in payload and payload.get("authoritative_record") is False:
+            errors.append(f"{label}:authoritative_record_expected_true")
+
+    return errors
+
+
 def load_site_world_bundle(registration_path: Path, *, require_spec: bool = False) -> SiteWorldBundle:
     """Load and validate a site-world registration and its adjacent artifacts."""
     registration_path = registration_path.resolve()
@@ -268,4 +407,5 @@ __all__ = [
     "load_site_world_bundle",
     "merge_site_world_definition",
     "normalize_trajectory_payload",
+    "validate_site_world_bundle",
 ]

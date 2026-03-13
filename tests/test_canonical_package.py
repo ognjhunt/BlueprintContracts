@@ -7,7 +7,9 @@ from blueprint_contracts.canonical_package import (
     CANONICAL_PACKAGE_HASH_INPUTS,
     compute_canonical_package_version,
     normalized_json_bytes,
+    validate_canonical_package_contract,
     verify_canonical_package_version,
+    verify_canonical_package_version_details,
 )
 
 
@@ -32,6 +34,25 @@ def _base_inputs() -> dict:
             "task_anchor_manifest_path": "",
             "conditioning": {},
             "geometry": {},
+            "canonical_output": {
+                "canonical_artifact_uri": "gs://bucket/spec.json",
+                "presentation_artifact_uri": "gs://bucket/presentation_world_manifest.json",
+                "derivation_mode": "grounding_first",
+                "authoritative_record": True,
+            },
+            "presentation_output": {
+                "canonical_artifact_uri": "gs://bucket/spec.json",
+                "presentation_artifact_uri": "gs://bucket/runtime_demo_manifest.json",
+                "derivation_mode": "limited",
+                "authoritative_record": False,
+            },
+            "provenance": {
+                "grounding_level": "observed",
+                "confidence": 0.95,
+                "evidence_sources": ["gs://bucket/scene_memory_manifest.json"],
+                "canonical_truth": True,
+                "presentation_only": False,
+            },
         },
     }
 
@@ -118,6 +139,14 @@ def test_verify_canonical_package_version_handles_missing_inputs(tmp_path: Path)
         == "canonical_package_verification_inputs_missing"
     )
 
+    details = verify_canonical_package_version_details(
+        spec=spec,
+        protected_regions_manifest={"schema_version": "v1", "regions": []},
+        canonical_render_policy={"schema_version": "v1"},
+        presentation_variance_policy={"schema_version": "v1"},
+    )
+    assert details["status"] == "inputs_missing"
+
 
 def test_compute_and_verify_canonical_package_version(tmp_path: Path) -> None:
     inputs = _base_inputs()
@@ -170,6 +199,13 @@ def test_compute_and_verify_canonical_package_version(tmp_path: Path) -> None:
         )
         is None
     )
+    details = verify_canonical_package_version_details(
+        spec=spec,
+        protected_regions_manifest=inputs["protected_regions_manifest"],
+        canonical_render_policy=inputs["canonical_render_policy"],
+        presentation_variance_policy=inputs["presentation_variance_policy"],
+    )
+    assert details["status"] == "verified"
 
 
 def test_verify_canonical_package_version_reports_mismatch(tmp_path: Path) -> None:
@@ -208,6 +244,14 @@ def test_verify_canonical_package_version_reports_mismatch(tmp_path: Path) -> No
     )
     assert mismatch is not None
     assert mismatch.startswith("canonical_package_version_mismatch:")
+    details = verify_canonical_package_version_details(
+        spec=spec,
+        protected_regions_manifest=inputs["protected_regions_manifest"],
+        canonical_render_policy=inputs["canonical_render_policy"],
+        presentation_variance_policy=inputs["presentation_variance_policy"],
+    )
+    assert details["status"] == "mismatch"
+    assert details["observed_version"]
 
 
 def test_hash_input_order_is_documented() -> None:
@@ -221,3 +265,68 @@ def test_hash_input_order_is_documented() -> None:
         "canonical_render_policy",
         "presentation_variance_policy",
     )
+
+
+def test_verify_canonical_package_version_details_reports_expected_version_missing(tmp_path: Path) -> None:
+    inputs = _base_inputs()
+    scene_memory_manifest_path = tmp_path / "scene_memory_manifest.json"
+    conditioning_bundle_path = tmp_path / "conditioning_bundle.json"
+    object_geometry_manifest_path = tmp_path / "object_geometry_manifest.json"
+    task_anchor_manifest_path = tmp_path / "task_anchor_manifest.json"
+    for path, payload in (
+        (scene_memory_manifest_path, inputs["scene_memory_manifest"]),
+        (conditioning_bundle_path, inputs["conditioning_bundle"]),
+        (object_geometry_manifest_path, inputs["object_geometry_manifest"]),
+        (task_anchor_manifest_path, inputs["task_anchor_manifest"]),
+    ):
+        _write_json(path, payload)
+
+    spec = dict(inputs["site_world_spec"])
+    spec["conditioning"] = {
+        "scene_memory_manifest_path": str(scene_memory_manifest_path),
+        "conditioning_bundle_path": str(conditioning_bundle_path),
+        "local_paths": {},
+    }
+    spec["geometry"] = {"object_geometry_manifest_path": str(object_geometry_manifest_path)}
+    spec["task_anchor_manifest_path"] = str(task_anchor_manifest_path)
+
+    details = verify_canonical_package_version_details(
+        spec=spec,
+        protected_regions_manifest=inputs["protected_regions_manifest"],
+        canonical_render_policy=inputs["canonical_render_policy"],
+        presentation_variance_policy=inputs["presentation_variance_policy"],
+    )
+    assert details["status"] == "expected_version_missing"
+    assert verify_canonical_package_version(
+        spec=spec,
+        protected_regions_manifest=inputs["protected_regions_manifest"],
+        canonical_render_policy=inputs["canonical_render_policy"],
+        presentation_variance_policy=inputs["presentation_variance_policy"],
+    ) is None
+
+
+def test_validate_canonical_package_contract_rejects_invalid_contract() -> None:
+    spec = {
+        "canonical_package_version": "pkg-v1",
+        "canonical_output": {
+            "canonical_artifact_uri": "gs://bucket/spec.json",
+            "presentation_artifact_uri": "gs://bucket/presentation_world_manifest.json",
+            "derivation_mode": "grounding_first",
+            "authoritative_record": True,
+        },
+        "presentation_output": {
+            "canonical_artifact_uri": "gs://bucket/spec.json",
+            "presentation_artifact_uri": "gs://bucket/runtime_demo_manifest.json",
+            "derivation_mode": "limited",
+            "authoritative_record": True,
+        },
+        "provenance": {
+            "grounding_level": "observed",
+            "evidence_sources": [],
+            "canonical_truth": True,
+            "presentation_only": False,
+        },
+    }
+    errors = validate_canonical_package_contract(spec)
+    assert "presentation_output:authoritative_record_expected_false" in errors
+    assert "provenance:canonical_truth_requires_evidence_sources" in errors
