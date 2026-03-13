@@ -66,10 +66,7 @@ def test_validate_thin_handoff() -> None:
 def test_reject_missing_required_nested_field() -> None:
     payload = _valid_handoff()
     del payload["site_constraints"]["known_blockers"]
-    with pytest.raises(
-        QualifiedOpportunityValidationError,
-        match=r"site_constraints\.known_blockers",
-    ):
+    with pytest.raises(QualifiedOpportunityValidationError, match=r"site_constraints\.known_blockers"):
         validate_qualified_opportunity_handoff(payload)
 
 

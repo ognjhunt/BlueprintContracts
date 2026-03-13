@@ -1,7 +1,7 @@
 [project]
 name = "blueprint-contracts"
 version = "0.1.0"
-description = "Shared cross-repo handoff, site-world, runtime-layer, and canonical package contracts for Blueprint"
+description = "Shared handoff, site-world, runtime-layer, and canonical package contracts for Blueprint"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
