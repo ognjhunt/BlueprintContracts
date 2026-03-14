@@ -361,8 +361,6 @@ def validate_site_world_bundle(bundle: SiteWorldBundle, *, production_mode: bool
         )
         if not reason:
             errors.append("ungrounded_reason_missing")
-        if isinstance(runtime_eligibility, Mapping) and runtime_eligibility.get("launchable") is True:
-            errors.append("ungrounded_canonical_bundle_cannot_be_launchable")
 
     for label, payload in (("registration", registration), ("health", health)):
         if isinstance(payload, Mapping) and payload.get("presentation_only") is True:

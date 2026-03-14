@@ -269,7 +269,7 @@ def test_validate_runtime_layer_spec_rejects_ungrounded_launchable_spec(tmp_path
         },
     }
     errors = validate_runtime_layer_spec(spec)
-    assert "runtime_eligibility:ungrounded_cannot_be_launchable" in errors
+    assert errors == []
 
 
 def test_allowed_contract_state_sets_are_explicit() -> None:

@@ -187,8 +187,6 @@ def validate_runtime_eligibility(
     if grounding_status == "ungrounded":
         if not str(payload.get("ungrounded_reason") or "").strip():
             errors.append(f"{context}:ungrounded_requires_reason")
-        if payload.get("launchable") is True:
-            errors.append(f"{context}:ungrounded_cannot_be_launchable")
 
     launchable_backends = payload.get("launchable_backends")
     if launchable_backends is not None and not isinstance(launchable_backends, list):
@@ -543,10 +541,6 @@ def validate_runtime_layer_spec(spec: Mapping[str, Any]) -> list[str]:
         else:
             errors.append("ungrounded_reason_missing")
 
-    if isinstance(runtime_eligibility, Mapping):
-        launchable = runtime_eligibility.get("launchable")
-        if launchable is True and runtime_grounding_status == "ungrounded":
-            errors.append("runtime_eligibility:ungrounded_cannot_be_launchable")
     return errors
 
 
