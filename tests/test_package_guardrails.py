@@ -27,10 +27,25 @@ def test_package_root_surface_is_minimal() -> None:
 
 def test_module_public_apis_are_explicit() -> None:
     handoff_contract = importlib.import_module("blueprint_contracts.handoff_contract")
+    capture_contract = importlib.import_module("blueprint_contracts.capture_contract")
     site_world_contract = importlib.import_module("blueprint_contracts.site_world_contract")
     runtime_layer_contract = importlib.import_module("blueprint_contracts.runtime_layer_contract")
     canonical_package = importlib.import_module("blueprint_contracts.canonical_package")
 
+    assert capture_contract.__all__ == [
+        "ALLOWED_CAPTURE_MODES",
+        "ALLOWED_CAPTURE_MODALITIES",
+        "ALLOWED_CAPTURE_SOURCES",
+        "ALLOWED_EVIDENCE_TIERS",
+        "ALLOWED_REQUESTED_LANES",
+        "CAPTURE_DESCRIPTOR_SCHEMA_VERSION",
+        "normalize_capture_modality",
+        "normalize_capture_source",
+        "normalize_capture_tier",
+        "normalize_checkpoint_events",
+        "normalize_requested_lanes",
+        "normalize_route_anchors",
+    ]
     assert handoff_contract.__all__ == [
         "ALLOWED_QUALIFICATION_STATES",
         "LEGACY_THIN_COMPATIBILITY_MODE",

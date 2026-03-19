@@ -12,6 +12,7 @@ This package owns portable contract logic for artifacts that cross repo boundari
 It is intentionally stdlib-only, low-cost to import, and narrow in scope. The supported public API is module-based:
 
 - `blueprint_contracts.handoff_contract`
+- `blueprint_contracts.capture_contract`
 - `blueprint_contracts.site_world_contract`
 - `blueprint_contracts.runtime_layer_contract`
 - `blueprint_contracts.canonical_package`
@@ -21,6 +22,7 @@ It is intentionally stdlib-only, low-cost to import, and narrow in scope. The su
 ## What Belongs Here
 
 - Portable contract validation for qualified opportunity handoffs
+- Portable enums and normalizers for the capture-side boundary between producer repos and Pipeline
 - Structural validation and normalization for site-world registration/spec/health artifacts
 - Shared runtime-layer policy constants and helper builders that must not diverge across repos
 - Canonical package version computation and verification
@@ -42,6 +44,7 @@ It is intentionally stdlib-only, low-cost to import, and narrow in scope. The su
 Each module defines its supported exports via `__all__`. Anything prefixed with `_` is internal-only and may change without notice.
 
 - `handoff_contract`: validates and normalizes the qualified opportunity payload boundary
+- `capture_contract`: defines shared capture source/modality/tier enums plus sidecar normalizers
 - `site_world_contract`: loads adjacent site-world artifacts and summarizes local grounding completeness
 - `runtime_layer_contract`: defines shared thresholds/policies for protected region handling
 - `canonical_package`: computes and verifies the deterministic canonical package version
