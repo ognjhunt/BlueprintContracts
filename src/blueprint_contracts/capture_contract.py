@@ -21,7 +21,14 @@ ALLOWED_EVIDENCE_TIERS = (
     "video_with_validated_scaffolding",
 )
 ALLOWED_CAPTURE_MODES = ("qualification_only", "site_world_candidate")
-ALLOWED_REQUESTED_LANES = ("qualification", "scene_memory", "evaluation_prep")
+ALLOWED_REQUESTED_LANES = (
+    "qualification",
+    "scene_memory",
+    "retrieval_index",
+    "frame_alignment",
+    "evaluation_prep",
+    "synthesis_coverage_validation",
+)
 
 
 def _text(value: Any) -> str:
@@ -79,9 +86,12 @@ def normalize_requested_lanes(raw_requested_lanes: Any) -> List[str]:
             continue
         if lowered in ALLOWED_REQUESTED_LANES and lowered not in normalized:
             normalized.append(lowered)
-            if lowered == "evaluation_prep" and "qualification" not in normalized:
+            if lowered in {"retrieval_index", "frame_alignment", "evaluation_prep"} and "qualification" not in normalized:
                 normalized.append("qualification")
-    if "evaluation_prep" in normalized and "qualification" not in normalized:
+    if (
+        {"retrieval_index", "frame_alignment", "evaluation_prep"} & set(normalized)
+        and "qualification" not in normalized
+    ):
         normalized.append("qualification")
     ordered: List[str] = []
     for lane in ALLOWED_REQUESTED_LANES:

@@ -45,7 +45,14 @@ def test_normalize_capture_modality_preserves_iphone_video_only_truth() -> None:
 def test_normalize_requested_lanes_expands_all_and_evaluation_prep() -> None:
     assert normalize_requested_lanes(None) == ["qualification"]
     assert normalize_requested_lanes("evaluation_prep") == ["qualification", "evaluation_prep"]
-    assert normalize_requested_lanes("all") == ["qualification", "scene_memory", "evaluation_prep"]
+    assert normalize_requested_lanes("all") == [
+        "qualification",
+        "scene_memory",
+        "retrieval_index",
+        "frame_alignment",
+        "evaluation_prep",
+        "synthesis_coverage_validation",
+    ]
 
 
 def test_normalize_route_and_checkpoint_sidecars() -> None:
