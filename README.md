@@ -2,6 +2,8 @@
 
 `BlueprintContracts` is the single lightweight source of truth for shared handoff, site-world, runtime-layer policy, and canonical package contracts used by Pipeline and Validation.
 
+Public product boundary: `site_world`, `world_model`, and canonical package names in this repo are compatibility/schema terms. They support Blueprint's current public products: real-site Task Evaluation Runs and Post-Training Data Packages. They must not be used to reframe world models as the primary public offer.
+
 ## What This Repo Is For
 
 This package owns portable contract logic for artifacts that cross repo boundaries between:
@@ -23,7 +25,7 @@ It is intentionally stdlib-only, low-cost to import, and narrow in scope. The su
 
 - Portable contract validation for qualified opportunity handoffs
 - Portable enums and normalizers for the capture-side boundary between producer repos and Pipeline
-- Structural validation and normalization for site-world registration/spec/health artifacts
+- Structural validation and normalization for site-world registration/spec/health artifacts that support evaluation and data-package workflows
 - Shared runtime-layer policy constants and helper builders that must not diverge across repos
 - Canonical package version computation and verification
 - Shared public exports needed by both consumer repos

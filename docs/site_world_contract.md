@@ -4,6 +4,8 @@
 
 `site_world_contract` defines the shared canonical site-world package boundary between `BlueprintCapturePipeline` and `BlueprintValidation`.
 
+Public product boundary: `site_world` remains a compatibility/schema term for canonical artifacts. It supports Task Evaluation Runs, Post-Training Data Packages, hosted review, and validation, but it is not the primary public offer by itself.
+
 The package is grounding-first and authoritative:
 
 - `site_world_registration.json` is the authoritative runtime registration record

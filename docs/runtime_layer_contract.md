@@ -10,6 +10,8 @@
 
 It does not own runtime execution. It owns the contract both repos must agree on.
 
+Public product boundary: runtime-layer and site-world contracts support Task Evaluation Runs, Post-Training Data Packages, hosted review, and validation. They do not by themselves sell or prove a primary world-model product.
+
 ## Supported Public API
 
 - `ALLOWED_GROUNDING_LEVELS`

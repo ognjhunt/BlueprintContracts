@@ -11,6 +11,7 @@ This handoff is not a canonical site-world package.
 - it does not prove canonical truth
 - it does not imply runtime readiness
 - it does not imply canonical package verification
+- it does not make qualification, site-world compatibility artifacts, or world-model language the primary public product
 
 ## Supported Public API
 
