@@ -1,0 +1,269 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tryblueprint.io/robot_eval_job_request.v1.schema.json",
+  "title": "Blueprint robot eval job request",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "job_id",
+    "buyer_request_id",
+    "site_package",
+    "policy_package",
+    "proof_boundary",
+    "execution_request"
+  ],
+  "properties": {
+    "schema_version": { "const": "robot_eval_job_request.v1" },
+    "job_id": { "type": "string", "minLength": 1 },
+    "buyer_request_id": { "type": "string", "minLength": 1 },
+    "site_package": {
+      "type": "object",
+      "required": [
+        "site_slug",
+        "site_id",
+        "site_submission_id",
+        "capture_job_id",
+        "capture_id",
+        "buyer_request_id",
+        "capture_root",
+        "package_uri",
+        "task_thresholds_uri",
+        "publication_readiness_uri"
+      ],
+      "properties": {
+        "site_slug": { "type": "string", "minLength": 1 },
+        "site_id": { "type": "string", "minLength": 1 },
+        "site_submission_id": { "type": "string", "minLength": 1 },
+        "capture_job_id": { "type": "string", "minLength": 1 },
+        "capture_id": { "type": "string", "minLength": 1 },
+        "buyer_request_id": { "type": "string", "minLength": 1 },
+        "capture_root": { "type": "string", "minLength": 1 },
+        "package_uri": { "type": "string", "minLength": 1 },
+        "task_thresholds_uri": { "type": "string", "minLength": 1 },
+        "publication_readiness_uri": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "policy_package": {
+      "type": "object",
+      "properties": {
+        "policy_api_endpoint": { "type": "object", "minProperties": 1 },
+        "docker_container": { "type": "object", "minProperties": 1 },
+        "recorded_action_trace": { "type": "object", "minProperties": 1 },
+        "high_level_skill_trace": { "type": "object", "minProperties": 1 },
+        "teleop_demo": { "type": "object", "minProperties": 1 },
+        "sim_controller_plugin": { "type": "object", "minProperties": 1 }
+      },
+      "anyOf": [
+        { "required": ["policy_api_endpoint"] },
+        { "required": ["docker_container"] },
+        { "required": ["recorded_action_trace"] },
+        { "required": ["high_level_skill_trace"] },
+        { "required": ["teleop_demo"] },
+        { "required": ["sim_controller_plugin"] }
+      ],
+      "additionalProperties": true
+    },
+    "evaluation_scope": {
+      "type": "object",
+      "properties": {
+        "mode": { "const": "virtual_policy_evaluation" },
+        "physical_robot_deployment_claim_allowed": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "wam_evaluator_backend": { "const": "pipeline_selected" },
+    "allowed_evaluator_backends": {
+      "type": "array",
+      "contains": { "const": "wam_policy_runtime" }
+    },
+    "optional_physics_state_authority": {
+      "type": "object",
+      "properties": {
+        "required_for_request_acceptance": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "proof_boundary": {
+      "type": "object",
+      "required": [
+        "simulator_execution_proven",
+        "rank_fidelity_result_proven",
+        "robot_policy_execution_proven",
+        "physics_contact_validated",
+        "non_ranking_operational_claim_validated",
+        "public_claim_upgrade_allowed"
+      ],
+      "properties": {
+        "simulator_execution_proven": { "const": false },
+        "rank_fidelity_result_proven": { "const": false },
+        "robot_policy_execution_proven": { "const": false },
+        "physics_contact_validated": { "const": false },
+        "non_ranking_operational_claim_validated": { "const": false },
+        "virtual_evaluation_proves_evaluation_readiness": { "const": false },
+        "virtual_evaluation_proves_non_ranking_operational_claim": { "const": false },
+        "public_claim_upgrade_allowed": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "simulator_scope": {
+      "type": "object",
+      "properties": {
+        "mode": { "const": "simulator_only" },
+        "simulator": { "const": "MuJoCo" },
+        "physical_robot_deployment_claim_allowed": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "execution_request": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "webapp_role",
+        "scheduler_owner",
+        "evaluation_scope",
+        "wam_evaluator_backend",
+        "allowed_evaluator_backends",
+        "proof_boundaries",
+        "queueing",
+        "preflight",
+        "simulator_routing",
+        "gpu_allocation",
+        "artifact_contract"
+      ],
+      "properties": {
+        "schema_version": { "const": "blueprint.robot_eval_execution_request.v1" },
+        "webapp_role": { "const": "queue_and_forward_only" },
+        "scheduler_owner": { "const": "BlueprintCapturePipeline" },
+        "evaluation_scope": {
+          "type": "object",
+          "required": ["mode", "physical_robot_deployment_claim_allowed"],
+          "properties": {
+            "mode": { "const": "virtual_policy_evaluation" },
+            "physical_robot_deployment_claim_allowed": { "const": false }
+          },
+          "additionalProperties": true
+        },
+        "wam_evaluator_backend": { "const": "pipeline_selected" },
+        "allowed_evaluator_backends": {
+          "type": "array",
+          "allOf": [
+            { "contains": { "const": "wam_policy_runtime" } },
+            { "contains": { "const": "vla_policy_runtime" } }
+          ]
+        },
+        "proof_boundaries": {
+          "type": "object",
+          "required": [
+            "virtual_evaluation_proves_evaluation_readiness",
+            "virtual_evaluation_proves_non_ranking_operational_claim"
+          ],
+          "properties": {
+            "virtual_evaluation_proves_evaluation_readiness": { "const": false },
+            "virtual_evaluation_proves_non_ranking_operational_claim": { "const": false }
+          },
+          "additionalProperties": true
+        },
+        "queueing": {
+          "type": "object",
+          "required": ["mode", "web_request_must_not_wait_for_simulator"],
+          "properties": {
+            "mode": { "const": "async_job" },
+            "web_request_must_not_wait_for_simulator": { "const": true }
+          },
+          "additionalProperties": true
+        },
+        "worker_selection": {
+          "type": "object",
+          "properties": {
+            "mode": { "const": "blueprint_selects_fastest_cheapest_available_simulator_worker" },
+            "customer_provider_choice_required": { "const": false }
+          },
+          "additionalProperties": true
+        },
+        "preflight": {
+          "type": "object",
+          "required": ["cpu_preflight_required_before_gpu", "blocks_gpu_when_missing"],
+          "properties": {
+            "cpu_preflight_required_before_gpu": { "const": true },
+            "blocks_gpu_when_missing": { "const": true }
+          },
+          "additionalProperties": true
+        },
+        "simulator_routing": {
+          "type": "object",
+          "required": ["requested_backend", "default_first_pass_backend", "default_first_gpu_backend"],
+          "properties": {
+            "requested_backend": { "const": "pipeline_selected" },
+            "default_first_pass_backend": { "const": "mujoco" },
+            "default_first_gpu_backend": { "const": "mujoco" },
+            "selection_policy": {
+              "type": "object",
+              "properties": {
+                "mode": { "const": "mujoco_first_unless_proof_requires_isaac" },
+                "first_pass_backend": { "const": "mujoco" }
+              },
+              "additionalProperties": true
+            },
+            "proof_boundaries": {
+              "type": "object",
+              "properties": {
+                "webapp_request_selects_policy_not_execution": { "const": true },
+                "mujoco_proof_does_not_clear_isaac_sim_gate": { "const": true }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "gpu_allocation": {
+          "type": "object",
+          "required": ["allocation_allowed_by_webapp", "gpu_spend_approved", "idle_shutdown_required"],
+          "properties": {
+            "allocation_allowed_by_webapp": { "const": false },
+            "gpu_spend_approved": { "const": false },
+            "idle_shutdown_required": { "const": true }
+          },
+          "additionalProperties": true
+        },
+        "artifact_contract": {
+          "type": "object",
+          "required": [
+            "expected_outputs",
+            "webapp_queues_and_forwards_only",
+            "pipeline_owns_execution_ranking_and_artifacts",
+            "public_claim_upgrade_allowed",
+            "startup_artifacts_are_advisory_until_owner_runtime_proof",
+            "ranking_outputs_are_advisory_until_owner_system_proof",
+            "ptdp_export_manifest_does_not_prove_delivery_or_training",
+            "simulator_execution_proven_by_webapp"
+          ],
+          "properties": {
+            "expected_outputs": {
+              "type": "array",
+              "allOf": [
+                { "contains": { "const": "scenario_eval_matrix.json" } },
+                { "contains": { "const": "policy_ranking_scorecard.json" } },
+                { "contains": { "const": "candidate_selection_report.json" } },
+                { "contains": { "const": "wam_eval_claim_boundary.json" } },
+                { "contains": { "const": "post_training_data_package_export_manifest.json" } },
+                { "contains": { "const": "proof_boundary.json" } },
+                { "contains": { "const": "proof_boundaries.json" } }
+              ]
+            },
+            "webapp_queues_and_forwards_only": { "const": true },
+            "pipeline_owns_execution_ranking_and_artifacts": { "const": true },
+            "public_claim_upgrade_allowed": { "const": false },
+            "startup_artifacts_are_advisory_until_owner_runtime_proof": { "const": true },
+            "ranking_outputs_are_advisory_until_owner_system_proof": { "const": true },
+            "ptdp_export_manifest_does_not_prove_delivery_or_training": { "const": true },
+            "simulator_execution_proven_by_webapp": { "const": false }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

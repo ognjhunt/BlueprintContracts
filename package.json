@@ -1,0 +1,15 @@
+{
+  "name": "@blueprint/contracts",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Shared Blueprint JSON Schemas and contract constants",
+  "exports": {
+    "./robot-eval-job-request": "./js/robot-eval-job-request.mjs",
+    "./schemas/robot_eval_job_request.v1.schema.json": "./src/blueprint_contracts/schemas/robot_eval_job_request.v1.schema.json",
+    "./schemas/robot_eval_job_request_inbox.v1.schema.json": "./src/blueprint_contracts/schemas/robot_eval_job_request_inbox.v1.schema.json"
+  },
+  "files": [
+    "js",
+    "src/blueprint_contracts/schemas"
+  ]
+}
