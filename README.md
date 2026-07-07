@@ -1,6 +1,6 @@
 # BlueprintContracts
 
-`BlueprintContracts` is the single lightweight source of truth for shared handoff, site-world, runtime-layer policy, and canonical package contracts used by Pipeline and Validation.
+`BlueprintContracts` is the single lightweight source of truth for shared handoff, site-world, runtime-layer policy, robot-eval job-request, and canonical package contracts used by Pipeline, WebApp, and Validation.
 
 Public product boundary: `site_world`, `world_model`, and canonical package names in this repo are compatibility/schema terms. They support Blueprint's current public products: real-site Task Evaluation Runs and Post-Training Data Packages. They must not be used to reframe world models as the primary public offer.
 
@@ -9,6 +9,7 @@ Public product boundary: `site_world`, `world_model`, and canonical package name
 This package owns portable contract logic for artifacts that cross repo boundaries between:
 
 - `/Users/nijelhunt_1/workspace/BlueprintCapturePipeline`
+- `/Users/nijelhunt_1/workspace/Blueprint-WebApp`
 - `/Users/nijelhunt_1/workspace/BlueprintValidation`
 
 It is intentionally stdlib-only, low-cost to import, and narrow in scope. The supported public API is module-based:
@@ -17,6 +18,7 @@ It is intentionally stdlib-only, low-cost to import, and narrow in scope. The su
 - `blueprint_contracts.capture_contract`
 - `blueprint_contracts.site_world_contract`
 - `blueprint_contracts.runtime_layer_contract`
+- `blueprint_contracts.robot_eval_job_request_contract`
 - `blueprint_contracts.canonical_package`
 
 `blueprint_contracts.__init__` is metadata-only and should not be treated as a compatibility bucket.
@@ -27,6 +29,7 @@ It is intentionally stdlib-only, low-cost to import, and narrow in scope. The su
 - Portable enums and normalizers for the capture-side boundary between producer repos and Pipeline
 - Structural validation and normalization for site-world registration/spec/health artifacts that support evaluation and data-package workflows
 - Shared runtime-layer policy constants and helper builders that must not diverge across repos
+- Shared `robot_eval_job_request.v1` and inbox JSON Schemas consumable from Python and Node
 - Canonical package version computation and verification
 - Shared public exports needed by both consumer repos
 
@@ -49,6 +52,7 @@ Each module defines its supported exports via `__all__`. Anything prefixed with 
 - `capture_contract`: defines shared capture source/modality/tier enums plus sidecar normalizers
 - `site_world_contract`: loads adjacent site-world artifacts and summarizes local grounding completeness
 - `runtime_layer_contract`: defines shared thresholds/policies for protected region handling
+- `robot_eval_job_request_contract`: exposes the robot-eval job request JSON Schemas and high-risk constants
 - `canonical_package`: computes and verifies the deterministic canonical package version
 
 Module-level imports are the supported consumer pattern:
@@ -57,7 +61,14 @@ Module-level imports are the supported consumer pattern:
 from blueprint_contracts.handoff_contract import validate_qualified_opportunity_handoff
 from blueprint_contracts.site_world_contract import load_site_world_bundle
 from blueprint_contracts.runtime_layer_contract import classify_region
+from blueprint_contracts.robot_eval_job_request_contract import robot_eval_job_request_schema
 from blueprint_contracts.canonical_package import compute_canonical_package_version
+```
+
+Node consumers can load the same schema files through the package export:
+
+```js
+import { robotEvalJobRequestSchema } from "@blueprint/contracts/robot-eval-job-request";
 ```
 
 ## Consumer Install and Pinning
@@ -107,6 +118,7 @@ The test suite includes guardrails for:
 - [`docs/handoff_contract.md`](/Users/nijelhunt_1/workspace/BlueprintContracts/docs/handoff_contract.md)
 - [`docs/site_world_contract.md`](/Users/nijelhunt_1/workspace/BlueprintContracts/docs/site_world_contract.md)
 - [`docs/runtime_layer_contract.md`](/Users/nijelhunt_1/workspace/BlueprintContracts/docs/runtime_layer_contract.md)
+- [`docs/robot_eval_job_request_contract.md`](/Users/nijelhunt_1/workspace/BlueprintContracts/docs/robot_eval_job_request_contract.md)
 - [`docs/canonical_package.md`](/Users/nijelhunt_1/workspace/BlueprintContracts/docs/canonical_package.md)
 - [`docs/maintenance.md`](/Users/nijelhunt_1/workspace/BlueprintContracts/docs/maintenance.md)
 - [`CHANGELOG.md`](/Users/nijelhunt_1/workspace/BlueprintContracts/CHANGELOG.md)

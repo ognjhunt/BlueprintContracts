@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tryblueprint.io/robot_eval_job_request_inbox.v1.schema.json",
+  "title": "Blueprint robot eval job request inbox envelope",
+  "type": "object",
+  "required": [
+    "queue_contract",
+    "status",
+    "queued_at_iso",
+    "job_id",
+    "buyer_request_id",
+    "pipeline_command",
+    "pipeline_consumer",
+    "job_request"
+  ],
+  "properties": {
+    "queue_contract": { "const": "robot_eval_job_request_inbox.v1" },
+    "status": { "const": "queued_for_pipeline" },
+    "queued_at_iso": { "type": "string", "minLength": 1 },
+    "job_id": { "type": "string", "minLength": 1 },
+    "buyer_request_id": { "type": "string", "minLength": 1 },
+    "pipeline_command": { "const": "blueprint-run-robot-eval-job" },
+    "pipeline_consumer": { "const": "BlueprintCapturePipeline" },
+    "job_request": {
+      "$ref": "robot_eval_job_request.v1.schema.json"
+    }
+  },
+  "additionalProperties": true
+}

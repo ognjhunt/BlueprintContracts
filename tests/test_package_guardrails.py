@@ -30,6 +30,9 @@ def test_module_public_apis_are_explicit() -> None:
     capture_contract = importlib.import_module("blueprint_contracts.capture_contract")
     site_world_contract = importlib.import_module("blueprint_contracts.site_world_contract")
     runtime_layer_contract = importlib.import_module("blueprint_contracts.runtime_layer_contract")
+    robot_eval_job_request_contract = importlib.import_module(
+        "blueprint_contracts.robot_eval_job_request_contract"
+    )
     canonical_package = importlib.import_module("blueprint_contracts.canonical_package")
 
     assert capture_contract.__all__ == [
@@ -91,6 +94,19 @@ def test_module_public_apis_are_explicit() -> None:
         "validate_runtime_eligibility",
         "validate_runtime_layer_spec",
         "with_grounding_fields",
+    ]
+    assert robot_eval_job_request_contract.__all__ == [
+        "POLICY_MODALITIES",
+        "PROOF_BOUNDARY_FALSE_FIELDS",
+        "REQUIRED_ARTIFACT_CONTRACT_OUTPUTS",
+        "REQUIRED_SITE_PACKAGE_FIELDS",
+        "ROBOT_EVAL_JOB_REQUEST_INBOX_CONTRACT",
+        "ROBOT_EVAL_JOB_REQUEST_INBOX_SCHEMA_FILE",
+        "ROBOT_EVAL_JOB_REQUEST_SCHEMA_FILE",
+        "ROBOT_EVAL_JOB_REQUEST_SCHEMA_VERSION",
+        "robot_eval_job_request_inbox_schema",
+        "robot_eval_job_request_schema",
+        "validate_robot_eval_job_request_constants",
     ]
     assert canonical_package.__all__ == [
         "CANONICAL_PACKAGE_HASH_INPUTS",
